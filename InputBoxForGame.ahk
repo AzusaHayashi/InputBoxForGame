@@ -73,7 +73,7 @@ ButtonSubmit:
         WinActivate, ahk_id %hWnd%
     Send ^v
     Sleep 100
-    Send Enter
+    Send {Enter}
 return
 
 GuiClose:
