@@ -1,16 +1,8 @@
 ﻿#SingleInstance, Force
 
 ; ========== Customize ==========
-; Default: Ctrl+Alt+I:
-hotkeyKey := "^!i"
-; Win+F1:
-; hotkeyKey := "#F1"
-
-; Shift+Ctrl+Space:
-; hotkeyKey := "+^Space"
-
-; F2:
-; hotkeyKey := "F2"
+; Default: Ctrl+Alt+i:
+IniRead, hotkeyKey, settings.ini, Hotkey, Key, ^!i
 
 if (A_Language = "0804") {
     Disclaimer := "请仔细阅读以下免责声明：`n`n"
