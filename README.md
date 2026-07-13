@@ -9,5 +9,5 @@ Let me know if anyone wants an auto paste function.
 BTW the settings.ini file should be like:  
 ```ini
 [Hotkey]
-Key = ^!b
+Key = ^!i
 ```
