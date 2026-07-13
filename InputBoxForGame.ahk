@@ -83,35 +83,7 @@ GuiEscape:
         WinActivate, ahk_id %hWnd%
 return
 
-; ---------- 辅助函数：将文本先转 UTF-8 字节，再按 GBK(CP936) 解码成字符串 ----------
-UTF8toGBKString(InputText) {
-    ; 获取 UTF-8 字节长度（不含终止符）
-    byteLen := StrPut(InputText, "UTF-8") - 1
-    if (byteLen <= 0)
-        return ""
-
-    ; 分配缓冲区（含终止符）
-    VarSetCapacity(buf, byteLen + 1)
-    StrPut(InputText, &buf, byteLen + 1, "UTF-8")
-
-    ; 如果字节长度为奇数，追加一个空格（0x20）并重新设置终止符
-    if (Mod(byteLen, 2) = 1) {
-        ; 创建新缓冲区（原长度 + 空格 + 终止符）
-        newLen := byteLen + 2          ; 额外 1 字节空格 + 1 字节 0x00
-        VarSetCapacity(buf2, newLen)
-        ; 复制原字节
-        DllCall("RtlMoveMemory", "Ptr", &buf2, "Ptr", &buf, "UInt", byteLen)
-        ; 追加空格和终止符
-        NumPut(0x20, buf2, byteLen, "UChar")   ; 空格
-        NumPut(0,   buf2, byteLen+1, "UChar")  ; 终止符
-        ; 使用新缓冲区
-        buf := buf2
-        byteLen := byteLen + 1          ; 更新长度（为偶数）
-    }
-
-    ; 按 GBK(CP936) 解码成字符串（此时字节数为偶数，不会丢字）
-    return StrGet(&buf, "CP936")
-}
+; ---------- 辅助函数 ----------
 
 SetGBKClipboard(text) {
     ; 计算 UTF-8 字节长度（含终止符）
