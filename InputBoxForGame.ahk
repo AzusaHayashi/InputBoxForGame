@@ -60,9 +60,8 @@ return
 ButtonSubmit:
     Gui, Submit, NoHide
     if (CopyMode = "GBK") {
-        ; 将输入文本转为 UTF-8 字节，再按 GBK 解码为乱码字符串
-        Clipboard := UTF8toGBKString(InputText)
-    } else {
+    SetGBKClipboard(InputText)   ; 直接写入二进制剪贴板
+    }  else {
         Clipboard := InputText
     }
     Gui, Destroy
@@ -71,6 +70,7 @@ ButtonSubmit:
     ToolTip
     if WinExist("ahk_id " . hWnd)
         WinActivate, ahk_id %hWnd%
+        Sleep 200
     Send ^v
     Sleep 100
     Send {Enter}
@@ -84,17 +84,54 @@ GuiEscape:
 return
 
 ; ---------- 辅助函数：将文本先转 UTF-8 字节，再按 GBK(CP936) 解码成字符串 ----------
-UTF8toGBKString(text) {
-    ; 1. 将文本转换为 UTF-8 字节（含终止符）
-    numBytes := StrPut(text, "UTF-8")
-    if (numBytes <= 1) {
-        return ""   ; 空文本直接返回
+UTF8toGBKString(InputText) {
+    ; 获取 UTF-8 字节长度（不含终止符）
+    byteLen := StrPut(InputText, "UTF-8") - 1
+    if (byteLen <= 0)
+        return ""
+
+    ; 分配缓冲区（含终止符）
+    VarSetCapacity(buf, byteLen + 1)
+    StrPut(InputText, &buf, byteLen + 1, "UTF-8")
+
+    ; 如果字节长度为奇数，追加一个空格（0x20）并重新设置终止符
+    if (Mod(byteLen, 2) = 1) {
+        ; 创建新缓冲区（原长度 + 空格 + 终止符）
+        newLen := byteLen + 2          ; 额外 1 字节空格 + 1 字节 0x00
+        VarSetCapacity(buf2, newLen)
+        ; 复制原字节
+        DllCall("RtlMoveMemory", "Ptr", &buf2, "Ptr", &buf, "UInt", byteLen)
+        ; 追加空格和终止符
+        NumPut(0x20, buf2, byteLen, "UChar")   ; 空格
+        NumPut(0,   buf2, byteLen+1, "UChar")  ; 终止符
+        ; 使用新缓冲区
+        buf := buf2
+        byteLen := byteLen + 1          ; 更新长度（为偶数）
     }
+
+    ; 按 GBK(CP936) 解码成字符串（此时字节数为偶数，不会丢字）
+    return StrGet(&buf, "CP936")
+}
+
+SetGBKClipboard(text) {
+    ; 计算 UTF-8 字节长度（含终止符）
+    numBytes := StrPut(text, "UTF-8")
+    if (numBytes <= 1)
+        return
     VarSetCapacity(buf, numBytes)
     StrPut(text, &buf, numBytes, "UTF-8")
-    
-    ; 2. 将这些字节按 CP936(GBK) 解码为字符串
-    ;    如果字节数为奇数，StrGet 会自动处理（可能丢弃最后一个不完整字符）
-    ;    对于纯中文（每个汉字3字节，偶数个汉字即为偶数字节）不会丢字
-    return StrGet(&buf, "CP936")
+
+    ; 分配全局内存并写入数据
+    hMem := DllCall("GlobalAlloc", "UInt", 0x42, "UInt", numBytes, "Ptr")
+    if (!hMem)
+        return
+    pMem := DllCall("GlobalLock", "Ptr", hMem, "Ptr")
+    DllCall("RtlMoveMemory", "Ptr", pMem, "Ptr", &buf, "UInt", numBytes)
+    DllCall("GlobalUnlock", "Ptr", hMem)
+
+    ; 以 CF_TEXT 格式设置剪贴板
+    DllCall("OpenClipboard", "Ptr", 0)
+    DllCall("EmptyClipboard")
+    DllCall("SetClipboardData", "UInt", 1, "Ptr", hMem)   ; 1 = CF_TEXT
+    DllCall("CloseClipboard")
 }
