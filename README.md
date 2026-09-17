@@ -16,6 +16,7 @@ Anti-cheat systems in some games may classify this software as a prohibited tool
 - Custom shortcuts for Unicode normal input and GBK-compatible input.
 - Each shortcut has a modifier dropdown with `None`, `Shift`, `Ctrl`, and `Alt`, followed by a key capture field.
 - Start and Pause controls. Hotkeys are registered only after clicking Start / Apply.
+- An administrator restart button that requests Windows UAC elevation and relaunches the app with administrator rights.
 - A prominent disclaimer at the top of the GUI.
 - Automatic Unicode and GBK clipboard modes.
 - Optional Japanese IME state preservation when the input window opens.
@@ -31,6 +32,8 @@ Anti-cheat systems in some games may classify this software as a prohibited tool
 7. Type the text, press Enter, and the utility will return to the game and paste it.
 
 Click Pause to unregister the global hotkeys immediately. The settings window can be resized by dragging its borders.
+
+If the game or target window is running as administrator, click `Restart as administrator` in the settings window. Windows will show a UAC prompt, and the app will restart with elevated rights after confirmation. The button is disabled when the app already has administrator access.
 
 ## Japanese IME behavior
 

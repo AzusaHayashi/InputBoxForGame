@@ -5,7 +5,7 @@ SetWorkingDir %A_ScriptDir%
 
 ;@Ahk2Exe-SetName InputBoxForGame
 ;@Ahk2Exe-SetDescription InputBoxForGame - quick text input utility for games
-;@Ahk2Exe-SetVersion 1.2.1.0
+;@Ahk2Exe-SetVersion 1.2.2.0
 ;@Ahk2Exe-SetProductName InputBoxForGame
 ;@Ahk2Exe-SetCopyright Copyright (c) 2026 AzusaHayashi
 
@@ -50,6 +50,9 @@ if (A_Language = "0804") {
     UiStart := "启动 / 应用"
     UiPause := "暂停"
     UiExit := "退出"
+    UiRunAsAdmin := "以管理员身份重启"
+    UiAdminGranted := "已获得管理员权限"
+    UiAdminFailed := "无法获取管理员权限。UAC 提示可能已被取消。"
     UiPaused := "状态：已暂停"
     UiRunning := "状态：运行中"
     UiDirty := "状态：运行中（设置尚未应用）"
@@ -75,6 +78,9 @@ if (A_Language = "0804") {
     UiStart := "開始 / 適用"
     UiPause := "一時停止"
     UiExit := "終了"
+    UiRunAsAdmin := "管理者として再起動"
+    UiAdminGranted := "管理者権限で実行中"
+    UiAdminFailed := "管理者権限を取得できませんでした。UAC がキャンセルされた可能性があります。"
     UiPaused := "状態：一時停止中"
     UiRunning := "状態：実行中"
     UiDirty := "状態：実行中（設定は未適用）"
@@ -100,6 +106,9 @@ if (A_Language = "0804") {
     UiStart := "Start / Apply"
     UiPause := "Pause"
     UiExit := "Exit"
+    UiRunAsAdmin := "Restart as administrator"
+    UiAdminGranted := "Administrator access granted"
+    UiAdminFailed := "Could not obtain administrator access. The UAC prompt may have been canceled."
     UiPaused := "Status: paused"
     UiRunning := "Status: running"
     UiDirty := "Status: running (settings not applied)"
@@ -114,6 +123,9 @@ if (A_Language = "0804") {
 unicodeModifierIndex := GetModifierIndex(unicodeModifier)
 gbkModifierIndex := GetModifierIndex(gbkModifier)
 rememberIMEChecked := (RememberIMEState = "true") ? "Checked" : ""
+isAdministrator := A_IsAdmin
+adminButtonText := isAdministrator ? UiAdminGranted : UiRunAsAdmin
+adminButtonDisabled := isAdministrator ? "Disabled" : ""
 
 Gui, Main:New, +Resize +MinSize720x600 -MaximizeBox, %UiTitle%
 Gui, Main:Color, F7F8FA
@@ -143,6 +155,7 @@ Gui, Main:Add, Text, xm y+14 w250 vStatusText cA33A00, %UiPaused%
 Gui, Main:Add, Button, x+10 yp-7 w150 h34 Default vStartButton gStartApp, %UiStart%
 Gui, Main:Add, Button, x+10 yp w120 h34 vPauseButton gPauseApp Disabled, %UiPause%
 Gui, Main:Add, Button, x+10 yp w90 h34 vExitButton gExitApplication, %UiExit%
+Gui, Main:Add, Button, xm y+10 w180 h34 vAdminButton gRequestAdmin %adminButtonDisabled%, %adminButtonText%
 Gui, Main:Show, w760 h700 Center, %UiTitle%
 Gui, Main:+LastFound
 MainHwnd := WinExist()
@@ -258,6 +271,26 @@ ClearToolTip:
     ToolTip
 return
 
+RequestAdmin:
+    if (A_IsAdmin) {
+        GuiControl, Main:, AdminButton, %UiAdminGranted%
+        GuiControl, Main:Disable, AdminButton
+        return
+    }
+    Gosub SaveSettings
+    ErrorLevel := 0
+    if (A_IsCompiled)
+        Run, *RunAs "%A_ScriptFullPath%", %A_ScriptDir%, UseErrorLevel
+    else
+        Run, *RunAs "%A_AhkPath%" "%A_ScriptFullPath%", %A_ScriptDir%, UseErrorLevel
+    if ErrorLevel {
+        MsgBox, 16, %UiTitle%, %UiAdminFailed%
+        return
+    }
+    Sleep, 400
+    ExitApp
+return
+
 MainGuiSize:
     if (A_Gui != "Main")
         return
@@ -278,13 +311,14 @@ MainGuiSize:
     helpY := groupPosY + groupHeight + 10
     GuiControl, Main:Move, HelpText, x20 y%helpY% w%contentWidth%
     buttonY := A_GuiHeight - 55
-    statusY := buttonY + 7
+    statusY := A_GuiHeight - 88
     startX := A_GuiWidth - 400
     if (startX < 280)
         startX := 280
     pauseX := startX + 160
     exitX := startX + 290
-    GuiControl, Main:Move, StatusText, x20 y%statusY% w250
+    GuiControl, Main:Move, StatusText, x20 y%statusY% w500
+    GuiControl, Main:Move, AdminButton, x20 y%buttonY% w180 h34
     GuiControl, Main:Move, StartButton, x%startX% y%buttonY% w150 h34
     GuiControl, Main:Move, PauseButton, x%pauseX% y%buttonY% w120 h34
     GuiControl, Main:Move, ExitButton, x%exitX% y%buttonY% w90 h34
