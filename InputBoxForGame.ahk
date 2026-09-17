@@ -5,7 +5,7 @@ SetWorkingDir %A_ScriptDir%
 
 ;@Ahk2Exe-SetName InputBoxForGame
 ;@Ahk2Exe-SetDescription InputBoxForGame - quick text input utility for games
-;@Ahk2Exe-SetVersion 1.2.0.0
+;@Ahk2Exe-SetVersion 1.2.1.0
 ;@Ahk2Exe-SetProductName InputBoxForGame
 ;@Ahk2Exe-SetCopyright Copyright (c) 2026 AzusaHayashi
 
@@ -13,14 +13,18 @@ SetWorkingDir %A_ScriptDir%
 settingsFile := A_ScriptDir . "\settings.ini"
 unicodeHotkey := "^!i"
 gbkHotkey := "+b"
-AutoSwitchKana := "true"
-IMEName := "Microsoft IME"
+RememberIMEState := "true"
 
 IniRead, unicodeHotkey, %settingsFile%, Hotkey, Key, ^!i
 IniRead, gbkHotkey, %settingsFile%, Hotkey, GBKKey, +b
-IniRead, AutoSwitchKana, %settingsFile%, IME, AutoSwitchKana, true
-IniRead, IMEName, %settingsFile%, IME, IMEName, Microsoft IME
+IniRead, RememberIMEState, %settingsFile%, IME, RememberIMEState, __missing__
+if (RememberIMEState = "__missing__")
+    IniRead, RememberIMEState, %settingsFile%, IME, AutoSwitchKana, true
 
+RememberedIMEStateValid := false
+RememberedOpenStatus := 0
+RememberedConversionMode := 0
+RememberedSentenceMode := 0
 ParseHotkey(unicodeHotkey, unicodeModifier, unicodeKey)
 ParseHotkey(gbkHotkey, gbkModifier, gbkKey)
 Running := false
@@ -41,8 +45,7 @@ if (A_Language = "0804") {
     UiKey := "按键（点击后直接按）"
     UiUnicode := "Unicode 普通输入"
     UiGBK := "GBK 兼容输入"
-    UiAutoIME := "打开输入框时保持当前日文 IME 状态"
-    UiIMEName := "IME 名称匹配"
+    UiAutoIME := "记住输入框上次使用的日文 IME 状态"
     UiCaptureHelp := "提示：点击右侧按键框后直接按键；若同时按 Shift/Ctrl/Alt，左侧会自动同步。点击“启动 / 应用”后设置才会生效。"
     UiStart := "启动 / 应用"
     UiPause := "暂停"
@@ -67,8 +70,7 @@ if (A_Language = "0804") {
     UiKey := "キー（クリックして入力）"
     UiUnicode := "Unicode 通常入力"
     UiGBK := "GBK 互換入力"
-    UiAutoIME := "入力欄を開いたとき、現在の日本語 IME 状態を維持する"
-    UiIMEName := "IME 名の一致条件"
+    UiAutoIME := "入力欄で最後に使った日本語 IME 状態を記憶する"
     UiCaptureHelp := "右側のキー欄をクリックして、そのまま使いたいキーを押してください。Shift/Ctrl/Alt を同時に押すと左側へ自動反映されます。「開始 / 適用」で設定が有効になります。"
     UiStart := "開始 / 適用"
     UiPause := "一時停止"
@@ -93,8 +95,7 @@ if (A_Language = "0804") {
     UiKey := "Key (click, then press)"
     UiUnicode := "Unicode normal input"
     UiGBK := "GBK-compatible input"
-    UiAutoIME := "Keep the current Japanese IME state when opening the input window"
-    UiIMEName := "IME name match"
+    UiAutoIME := "Remember the Japanese IME state last used in the input window"
     UiCaptureHelp := "Click a key field on the right, then press the key you want. Shift/Ctrl/Alt is synchronized to the left automatically. Settings take effect after clicking Start / Apply."
     UiStart := "Start / Apply"
     UiPause := "Pause"
@@ -112,7 +113,7 @@ if (A_Language = "0804") {
 ; ========== Main GUI ==========
 unicodeModifierIndex := GetModifierIndex(unicodeModifier)
 gbkModifierIndex := GetModifierIndex(gbkModifier)
-autoSwitchChecked := (AutoSwitchKana = "true") ? "Checked" : ""
+rememberIMEChecked := (RememberIMEState = "true") ? "Checked" : ""
 
 Gui, Main:New, +Resize +MinSize720x600 -MaximizeBox, %UiTitle%
 Gui, Main:Color, F7F8FA
@@ -134,9 +135,7 @@ Gui, Main:Add, Hotkey, xs+290 ys+62 w230 vUnicodeKey gUnicodeHotkeyChanged, %uni
 Gui, Main:Add, Text, xs+18 ys+104 w120, %UiGBK%
 Gui, Main:Add, DropDownList, xs+150 ys+100 w120 vGBKModifier Choose%gbkModifierIndex%, None|Shift|Ctrl|Alt
 Gui, Main:Add, Hotkey, xs+290 ys+100 w230 vGBKKey gGBKHotkeyChanged, %gbkKey%
-Gui, Main:Add, Checkbox, xs+18 ys+142 vAutoSwitchKana %autoSwitchChecked% gRunningOptionChanged, %UiAutoIME%
-Gui, Main:Add, Text, xs+18 ys+176 w120, %UiIMEName%
-Gui, Main:Add, Edit, xs+150 ys+172 w370 vIMEName, %IMEName%
+Gui, Main:Add, Checkbox, xs+18 ys+142 vRememberIMEState %rememberIMEChecked% gRememberIMEStateChanged, %UiAutoIME%
 Gui, Main:Font, s9 Norm c555555, Microsoft YaHei UI
 Gui, Main:Add, Text, xm y+14 w720 vHelpText, %UiCaptureHelp%
 Gui, Main:Font, s10 Norm c202020, Microsoft YaHei UI
@@ -172,8 +171,7 @@ GBKHotkeyChanged:
         GuiControl, Main:, StatusText, %UiDirty%
 return
 
-RunningOptionChanged:
-    GuiControlGet, AutoSwitchKana,, AutoSwitchKana
+RememberIMEStateChanged:
     if (Running)
         GuiControl, Main:, StatusText, %UiDirty%
 return
@@ -235,12 +233,12 @@ SaveSettings:
     Gui, Main:Submit, NoHide
     unicodeHotkeyCombined := BuildHotkey(UnicodeModifier, UnicodeKey)
     gbkHotkeyCombined := BuildHotkey(GBKModifier, GBKKey)
-    autoSwitchValue := (AutoSwitchKana = 1 || AutoSwitchKana = "true") ? "true" : "false"
+    rememberIMEValue := (RememberIMEState = 1 || RememberIMEState = "true") ? "true" : "false"
 
     IniWrite, %unicodeHotkeyCombined%, %settingsFile%, Hotkey, Key
     IniWrite, %gbkHotkeyCombined%, %settingsFile%, Hotkey, GBKKey
-    IniWrite, %autoSwitchValue%, %settingsFile%, IME, AutoSwitchKana
-    IniWrite, %IMEName%, %settingsFile%, IME, IMEName
+    IniWrite, %rememberIMEValue%, %settingsFile%, IME, RememberIMEState
+    IniWrite, %rememberIMEValue%, %settingsFile%, IME, AutoSwitchKana
 return
 
 UnbindHotkeys:
@@ -320,16 +318,6 @@ return
 ; ========== Shared input window ==========
 DoAction:
     hWnd := WinActive("A")
-    targetIMEName := ""
-    targetIMEStateValid := false
-    targetOpenStatus := 0
-    targetConversionMode := 0
-    targetSentenceMode := 0
-    if (AutoSwitchKana = "true" && hWnd) {
-        targetIMEName := GetIMEName(hWnd)
-        if (targetIMEName != "" && IMEName != "" && InStr(targetIMEName, IMEName) > 0)
-            targetIMEStateValid := GetIMEContextState(hWnd, targetOpenStatus, targetConversionMode, targetSentenceMode)
-    }
 
     Gui, Input:New, +AlwaysOnTop, InputText
     Gui, Input:Font, s11, Microsoft YaHei UI
@@ -338,15 +326,15 @@ DoAction:
     Gui, Input:Show, w450, InputText
     GuiControl, Input:Focus, InputText
 
-    if (targetIMEStateValid) {
+    if ((RememberIMEState = 1 || RememberIMEState = "true") && RememberedIMEStateValid) {
         WinWaitActive, InputText, , 2
         ControlGet, hEdit, Hwnd, , Edit1, InputText
         if (!hEdit)
             hEdit := WinExist("InputText")
         if (hEdit) {
-            SetIMEContextState(hEdit, targetOpenStatus, targetConversionMode, targetSentenceMode)
+            SetIMEContextState(hEdit, RememberedOpenStatus, RememberedConversionMode, RememberedSentenceMode)
             Sleep, 180
-            SetIMEContextState(hEdit, targetOpenStatus, targetConversionMode, targetSentenceMode)
+            SetIMEContextState(hEdit, RememberedOpenStatus, RememberedConversionMode, RememberedSentenceMode)
         }
     }
 return
@@ -358,6 +346,7 @@ InputButtonSubmit:
     } else {
         Clipboard := InputText
     }
+    Gosub CaptureInputIMEState
     Gui, Input:Destroy
 
     if WinExist("ahk_id " . hWnd) {
@@ -376,9 +365,18 @@ return
 
 InputGuiClose:
 InputGuiEscape:
+    Gosub CaptureInputIMEState
     Gui, Input:Destroy
     if WinExist("ahk_id " . hWnd)
         WinActivate, ahk_id %hWnd%
+return
+
+CaptureInputIMEState:
+    if (RememberIMEState != 1 && RememberIMEState != "true")
+        return
+    ControlGet, hEdit, Hwnd, , Edit1, InputText
+    if (hEdit)
+        RememberedIMEStateValid := GetIMEContextState(hEdit, RememberedOpenStatus, RememberedConversionMode, RememberedSentenceMode)
 return
 
 ; ========== Helpers ==========
@@ -456,44 +454,25 @@ ParseHotkey(hotkey, ByRef modifier, ByRef key) {
 }
 
 GetIMEContextState(hWnd, ByRef openStatus, ByRef conversionMode, ByRef sentenceMode) {
-    hIMC := DllCall("ImmGetContext", "Ptr", hWnd, "Ptr")
+    hIMC := DllCall("imm32\ImmGetContext", "Ptr", hWnd, "Ptr")
     if (!hIMC)
         return false
-    openStatus := DllCall("ImmGetOpenStatus", "Ptr", hIMC, "Int")
+    openStatus := DllCall("imm32\ImmGetOpenStatus", "Ptr", hIMC, "Int")
     conversionMode := 0
     sentenceMode := 0
-    success := DllCall("ImmGetConversionStatus", "Ptr", hIMC, "UInt*", conversionMode, "UInt*", sentenceMode, "Int")
-    DllCall("ImmReleaseContext", "Ptr", hWnd, "Ptr", hIMC)
+    success := DllCall("imm32\ImmGetConversionStatus", "Ptr", hIMC, "UInt*", conversionMode, "UInt*", sentenceMode, "Int")
+    DllCall("imm32\ImmReleaseContext", "Ptr", hWnd, "Ptr", hIMC)
     return success
 }
 
 SetIMEContextState(hWnd, openStatus, conversionMode, sentenceMode) {
-    hIMC := DllCall("ImmGetContext", "Ptr", hWnd, "Ptr")
+    hIMC := DllCall("imm32\ImmGetContext", "Ptr", hWnd, "Ptr")
     if (!hIMC)
         return false
-    DllCall("ImmSetOpenStatus", "Ptr", hIMC, "Int", openStatus ? 1 : 0)
-    DllCall("ImmSetConversionStatus", "Ptr", hIMC, "UInt", conversionMode, "UInt", sentenceMode)
-    DllCall("ImmReleaseContext", "Ptr", hWnd, "Ptr", hIMC)
+    DllCall("imm32\ImmSetOpenStatus", "Ptr", hIMC, "Int", openStatus ? 1 : 0)
+    DllCall("imm32\ImmSetConversionStatus", "Ptr", hIMC, "UInt", conversionMode, "UInt", sentenceMode)
+    DllCall("imm32\ImmReleaseContext", "Ptr", hWnd, "Ptr", hIMC)
     return true
-}
-
-GetIMEName(hWnd := "") {
-    if (!hWnd)
-        hWnd := WinExist("A")
-    if (!hWnd)
-        return ""
-    hIMC := DllCall("ImmGetContext", "Ptr", hWnd, "Ptr")
-    if (!hIMC)
-        return ""
-    nameLen := DllCall("ImmGetDescription", "Ptr", hIMC, "Ptr", 0, "UInt", 0)
-    if (nameLen <= 0) {
-        DllCall("ImmReleaseContext", "Ptr", hWnd, "Ptr", hIMC)
-        return ""
-    }
-    VarSetCapacity(name, nameLen + 1)
-    DllCall("ImmGetDescription", "Ptr", hIMC, "Str", name, "UInt", nameLen + 1)
-    DllCall("ImmReleaseContext", "Ptr", hWnd, "Ptr", hIMC)
-    return name
 }
 
 ; Writes the text as UTF-8 bytes into CF_TEXT, producing the GBK-style

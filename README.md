@@ -34,11 +34,11 @@ Click Pause to unregister the global hotkeys immediately. The settings window ca
 
 ## Japanese IME behavior
 
-When `AutoSwitchKana=true`, the utility reads the current IME open state and conversion mode from the window that was active before the input box opened. It then applies that state to the input box instead of sending a Kana toggle key.
+When `RememberIMEState=true`, the utility remembers the IME open state and conversion mode that were active when the input box was last submitted or closed. On the next opening, it restores that remembered state to the new input box.
 
-This means the input box should follow whether Japanese input was already enabled, rather than forcing a fixed mode. Set `AutoSwitchKana=false` to disable this behavior. `IMEName` is used for a partial name match and defaults to `Microsoft IME`.
+This is useful when the first input box is manually switched to Japanese input and the desired input state is selected. After that first setup, the state is restored until the utility is closed. Set `RememberIMEState=false` to disable the behavior.
 
-Older configuration files may still contain `KanaToggleKey`. It is no longer used.
+Older configuration files may still contain `AutoSwitchKana`, `KanaToggleKey`, or `IMEName`. `AutoSwitchKana` is read as a compatibility fallback when `RememberIMEState` is missing; the other two keys are ignored.
 
 ## GBK-compatible mode
 
@@ -54,8 +54,7 @@ Key=^!i
 GBKKey=+b
 
 [IME]
-AutoSwitchKana=true
-IMEName=Microsoft IME
+RememberIMEState=true
 ```
 
 The default Unicode shortcut is `Ctrl+Alt+I`. The default GBK-compatible shortcut is `Shift+B`.
