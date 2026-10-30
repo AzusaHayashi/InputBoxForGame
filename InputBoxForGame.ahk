@@ -5,7 +5,7 @@ SetWorkingDir %A_ScriptDir%
 
 ;@Ahk2Exe-SetName InputBoxForGame
 ;@Ahk2Exe-SetDescription InputBoxForGame - quick text input utility for games
-;@Ahk2Exe-SetVersion 1.2.2.0
+;@Ahk2Exe-SetVersion 1.3.0.0
 ;@Ahk2Exe-SetProductName InputBoxForGame
 ;@Ahk2Exe-SetCopyright Copyright (c) 2026 AzusaHayashi
 
@@ -14,12 +14,17 @@ settingsFile := A_ScriptDir . "\settings.ini"
 unicodeHotkey := "^!i"
 gbkHotkey := "+b"
 RememberIMEState := "true"
+MaxPasteDelay := 10000
+DefaultPasteDelay := 200
+PasteDelay := DefaultPasteDelay
 
 IniRead, unicodeHotkey, %settingsFile%, Hotkey, Key, ^!i
 IniRead, gbkHotkey, %settingsFile%, Hotkey, GBKKey, +b
 IniRead, RememberIMEState, %settingsFile%, IME, RememberIMEState, __missing__
 if (RememberIMEState = "__missing__")
     IniRead, RememberIMEState, %settingsFile%, IME, AutoSwitchKana, true
+IniRead, PasteDelay, %settingsFile%, Input, PasteDelay, %DefaultPasteDelay%
+PasteDelay := NormalizePasteDelay(PasteDelay)
 
 RememberedIMEStateValid := false
 RememberedOpenStatus := 0
@@ -46,6 +51,9 @@ if (A_Language = "0804") {
     UiUnicode := "Unicode 普通输入"
     UiGBK := "GBK 兼容输入"
     UiAutoIME := "记住输入框上次使用的日文 IME 状态"
+    UiPasteDelay := "输入完成后等待（毫秒）"
+    UiPasteDelayHint := "0-10000，默认 200；卡顿时调大"
+    UiPasteDelayInvalid := "等待时间必须是 0 到 10000 之间的整数（毫秒）。"
     UiCaptureHelp := "提示：点击右侧按键框后直接按键；若同时按 Shift/Ctrl/Alt，左侧会自动同步。点击“启动 / 应用”后设置才会生效。"
     UiStart := "启动 / 应用"
     UiPause := "暂停"
@@ -74,6 +82,9 @@ if (A_Language = "0804") {
     UiUnicode := "Unicode 通常入力"
     UiGBK := "GBK 互換入力"
     UiAutoIME := "入力欄で最後に使った日本語 IME 状態を記憶する"
+    UiPasteDelay := "入力完了後の待機時間（ミリ秒）"
+    UiPasteDelayHint := "0〜10000、既定値 200。重いゲームでは大きめに"
+    UiPasteDelayInvalid := "待機時間は 0〜10000 の整数（ミリ秒）で指定してください。"
     UiCaptureHelp := "右側のキー欄をクリックして、そのまま使いたいキーを押してください。Shift/Ctrl/Alt を同時に押すと左側へ自動反映されます。「開始 / 適用」で設定が有効になります。"
     UiStart := "開始 / 適用"
     UiPause := "一時停止"
@@ -102,6 +113,9 @@ if (A_Language = "0804") {
     UiUnicode := "Unicode normal input"
     UiGBK := "GBK-compatible input"
     UiAutoIME := "Remember the Japanese IME state last used in the input window"
+    UiPasteDelay := "Delay before auto-paste (ms)"
+    UiPasteDelayHint := "0-10000, default 200. Raise it if the game stutters"
+    UiPasteDelayInvalid := "The delay must be an integer between 0 and 10000 milliseconds."
     UiCaptureHelp := "Click a key field on the right, then press the key you want. Shift/Ctrl/Alt is synchronized to the left automatically. Settings take effect after clicking Start / Apply."
     UiStart := "Start / Apply"
     UiPause := "Pause"
@@ -148,6 +162,10 @@ Gui, Main:Add, Text, xs+18 ys+104 w120, %UiGBK%
 Gui, Main:Add, DropDownList, xs+150 ys+100 w120 vGBKModifier Choose%gbkModifierIndex%, None|Shift|Ctrl|Alt
 Gui, Main:Add, Hotkey, xs+290 ys+100 w230 vGBKKey gGBKHotkeyChanged, %gbkKey%
 Gui, Main:Add, Checkbox, xs+18 ys+142 vRememberIMEState %rememberIMEChecked% gRememberIMEStateChanged, %UiAutoIME%
+Gui, Main:Add, Text, xs+18 ys+174 w190, %UiPasteDelay%
+Gui, Main:Add, Edit, xs+215 ys+170 w80 Number vPasteDelay gPasteDelayChanged, %PasteDelay%
+Gui, Main:Font, s9 Norm c777777, Microsoft YaHei UI
+Gui, Main:Add, Text, xs+305 ys+174 w400, %UiPasteDelayHint%
 Gui, Main:Font, s9 Norm c555555, Microsoft YaHei UI
 Gui, Main:Add, Text, xm y+14 w720 vHelpText, %UiCaptureHelp%
 Gui, Main:Font, s10 Norm c202020, Microsoft YaHei UI
@@ -189,8 +207,20 @@ RememberIMEStateChanged:
         GuiControl, Main:, StatusText, %UiDirty%
 return
 
+PasteDelayChanged:
+    if (Running)
+        GuiControl, Main:, StatusText, %UiDirty%
+return
+
 StartApp:
     Gui, Main:Submit, NoHide
+    if (ParsePasteDelay(PasteDelay) < 0) {
+        MsgBox, 48, %UiTitle%, %UiPasteDelayInvalid%
+        GuiControl, Main:Focus, PasteDelay
+        return
+    }
+    PasteDelay := ParsePasteDelay(PasteDelay)
+    GuiControl, Main:, PasteDelay, %PasteDelay%
     unicodeHotkeyCombined := BuildHotkey(UnicodeModifier, UnicodeKey)
     gbkHotkeyCombined := BuildHotkey(GBKModifier, GBKKey)
 
@@ -252,6 +282,12 @@ SaveSettings:
     IniWrite, %gbkHotkeyCombined%, %settingsFile%, Hotkey, GBKKey
     IniWrite, %rememberIMEValue%, %settingsFile%, IME, RememberIMEState
     IniWrite, %rememberIMEValue%, %settingsFile%, IME, AutoSwitchKana
+    if (ParsePasteDelay(PasteDelay) >= 0)
+        PasteDelay := ParsePasteDelay(PasteDelay)
+    else
+        PasteDelay := NormalizePasteDelay(PasteDelay)
+    GuiControl, Main:, PasteDelay, %PasteDelay%
+    IniWrite, %PasteDelay%, %settingsFile%, Input, PasteDelay
 return
 
 UnbindHotkeys:
@@ -386,8 +422,11 @@ InputButtonSubmit:
     if WinExist("ahk_id " . hWnd) {
         WinActivate, ahk_id %hWnd%
         WinWaitActive, ahk_id %hWnd%, , 2
-        Sleep, 200
     }
+    ; User-configurable wait (milliseconds) between finishing the input and
+    ; pasting into the game window.
+    if (PasteDelay > 0)
+        Sleep, %PasteDelay%
     SendInput ^v
     Sleep, 50
     SendInput {Enter}
@@ -447,6 +486,32 @@ BuildSendKey(modifier, key) {
         return ""
     baseKey := (StrLen(key) = 1) ? key : "{" . key . "}"
     return GetModifierPrefix(modifier) . baseKey
+}
+
+; Returns the delay in milliseconds, or -1 when the value is not a valid
+; integer inside 0..MaxPasteDelay.
+ParsePasteDelay(value) {
+    global MaxPasteDelay
+    value := Trim(value)
+    if (value = "")
+        return -1
+    if !RegExMatch(value, "^\d+$")
+        return -1
+    if (StrLen(value) > 9)
+        return -1
+    delay := value + 0
+    if (delay > MaxPasteDelay)
+        return -1
+    return delay
+}
+
+; Falls back to the default value for a broken or out-of-range stored value.
+NormalizePasteDelay(value) {
+    global DefaultPasteDelay
+    delay := ParsePasteDelay(value)
+    if (delay < 0)
+        return DefaultPasteDelay
+    return delay
 }
 
 ParseHotkey(hotkey, ByRef modifier, ByRef key) {

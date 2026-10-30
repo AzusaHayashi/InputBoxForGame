@@ -20,6 +20,7 @@ Anti-cheat systems in some games may classify this software as a prohibited tool
 - A prominent disclaimer at the top of the GUI.
 - Automatic Unicode and GBK clipboard modes.
 - Optional Japanese IME state preservation when the input window opens.
+- A configurable delay, in milliseconds, between finishing the input and the automatic paste.
 
 ## Usage
 
@@ -34,6 +35,14 @@ Anti-cheat systems in some games may classify this software as a prohibited tool
 Click Pause to unregister the global hotkeys immediately. The settings window can be resized by dragging its borders.
 
 If the game or target window is running as administrator, click `Restart as administrator` in the settings window. Windows will show a UAC prompt, and the app will restart with elevated rights after confirmation. The button is disabled when the app already has administrator access.
+
+## Paste delay
+
+After you press Enter and the utility switches back to the game window, it waits for the configured number of milliseconds before sending `Ctrl+V`. Set that wait in the `Delay before auto-paste (ms)` field on the settings window, between `0` and `10000`; the default is `200`.
+
+Use a larger value when the game takes a while to regain focus, for example on a heavily loaded machine or a game running at a low frame rate. Use `0` to paste as soon as the window is re-activated, which is faster but may paste into the wrong window if the game does not accept focus immediately.
+
+The value is validated when you click Start / Apply; anything that is not an integer in range is rejected, and a broken value found in `settings.ini` falls back to the default.
 
 ## Japanese IME behavior
 
@@ -58,11 +67,14 @@ GBKKey=+b
 
 [IME]
 RememberIMEState=true
+
+[Input]
+PasteDelay=200
 ```
 
-The default Unicode shortcut is `Ctrl+Alt+I`. The default GBK-compatible shortcut is `Shift+B`.
+The default Unicode shortcut is `Ctrl+Alt+I`. The default GBK-compatible shortcut is `Shift+B`. The default paste delay is `200` milliseconds.
 
-If no `settings.ini` exists, these defaults are used. Existing shortcut values are loaded into the GUI when the program starts.
+If no `settings.ini` exists, these defaults are used. Existing shortcut values and the paste delay are loaded into the GUI when the program starts. `PasteDelay` must be an integer between `0` and `10000`; a missing, non-numeric, or out-of-range value is replaced by the default.
 
 ## Build
 
@@ -77,6 +89,8 @@ D:\AHK\Compiler\Ahk2Exe.exe `
 ```
 
 `InputBoxForGame.exe` and `settings.ini` are ignored by Git. Release builds are published separately.
+
+Keep `InputBoxForGame.ahk` saved as UTF-8 with BOM. AutoHotkey v1 reads a BOM-less file as ANSI, and the localized GUI strings then turn into syntax errors at compile time.
 
 ## Credits
 
